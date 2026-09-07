@@ -2,6 +2,47 @@ import type { Locator, Page } from "playwright-core";
 import type { ChatGptWebAccountCapabilities } from "./chatgpt-web-models";
 
 export const CHATGPT_TEMPORARY_CHAT_URL = "https://chatgpt.com/?temporary-chat=true";
+export const CHATGPT_ORIGIN = "https://chatgpt.com";
+
+export function normalizeChatGptSurfaceUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`ChatGPT surface URL is invalid: ${value}`);
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname !== "chatgpt.com"
+    || parsed.username || parsed.password || parsed.hash) {
+    throw new Error("ChatGPT surface URL must be an HTTPS chatgpt.com URL without credentials or fragments");
+  }
+  const isTemporary = parsed.pathname === "/"
+    && parsed.searchParams.get("temporary-chat") === "true";
+  const isProject = /^\/g\/[^/]+\/project\/?$/.test(parsed.pathname)
+    && [...parsed.searchParams.keys()].length === 0;
+  if (!isTemporary && !isProject) {
+    throw new Error("ChatGPT surface URL must be Temporary Chat or a /g/<project>/project URL");
+  }
+  if (isTemporary) return CHATGPT_TEMPORARY_CHAT_URL;
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+  return parsed.toString();
+}
+
+export function isChatGptSurfaceUrl(value: string, expectedUrl: string): boolean {
+  let actual: URL;
+  let expected: URL;
+  try {
+    actual = new URL(value);
+    expected = new URL(normalizeChatGptSurfaceUrl(expectedUrl));
+  } catch {
+    return false;
+  }
+  if (actual.origin !== expected.origin || actual.pathname.replace(/\/+$/, "") !== expected.pathname.replace(/\/+$/, "")) {
+    return false;
+  }
+  return expected.searchParams.get("temporary-chat") === "true"
+    ? actual.searchParams.get("temporary-chat") === "true"
+    : true;
+}
 export const CHATGPT_COMPOSER_SELECTOR = [
   '[data-testid="prompt-textarea"]',
   "#prompt-textarea",
@@ -163,11 +204,12 @@ export async function assertAuthenticatedChatGptPage(page: Page): Promise<void> 
   }
 }
 
-export async function assertTemporaryChatPage(page: Page): Promise<void> {
-  const url = new URL(page.url());
-  const expected = new URL(CHATGPT_TEMPORARY_CHAT_URL);
-  if (url.origin !== expected.origin || url.pathname !== expected.pathname || url.searchParams.get("temporary-chat") !== "true") {
-    throw new Error(`ChatGPT left the isolated Temporary Chat surface (${page.url()})`);
+export async function assertChatGptSurfacePage(
+  page: Page,
+  expectedUrl: string = CHATGPT_TEMPORARY_CHAT_URL,
+): Promise<void> {
+  if (!isChatGptSurfaceUrl(page.url(), expectedUrl)) {
+    throw new Error(`ChatGPT left the configured surface (${page.url()}); expected ${normalizeChatGptSurfaceUrl(expectedUrl)}`);
   }
 }
 

@@ -44,7 +44,7 @@ import {
 import { estimateCompiledChatGptWebInputTokens } from "./input-tokens";
 import {
   assertAuthenticatedChatGptPage,
-  assertTemporaryChatPage,
+  assertChatGptSurfacePage,
   CHATGPT_ASSISTANT_TURN_SELECTOR,
   CHATGPT_COMPLETION_ACTION_SELECTOR,
   CHATGPT_COMPOSER_SELECTOR,
@@ -55,6 +55,8 @@ import {
   CHATGPT_USER_TURN_SELECTOR,
   activateChatGptEffortMenu,
   detectChatGptAccountCapabilities,
+  isChatGptSurfaceUrl,
+  normalizeChatGptSurfaceUrl,
   parseChatGptEffortSliderState,
 } from "../../chatgpt-session";
 import { loginVerificationMarkerPath } from "../../browser-login";
@@ -1210,6 +1212,7 @@ interface ChatGptSubmissionDomCache {
 
 export interface ResolvedBrowserConfig {
   appName: string;
+  projectUrl: string;
   browserHost: "managed-chrome" | "launcher";
   browserHostDescriptorPath?: string;
   browserHelperScriptPath?: string;
@@ -1880,6 +1883,7 @@ class ChatGptBrowserDiagnostics {
 export function resolveBrowserConfig(provider: CodexProviderConfig): ResolvedBrowserConfig {
   const configured = provider.chatgptWeb ?? {};
   const appName = configured.appName?.trim() || CHATGPT_CONNECTOR_NAME;
+  const projectUrl = normalizeChatGptSurfaceUrl(configured.projectUrl || CHATGPT_TEMPORARY_CHAT_URL);
   const browserHost = configured.browserHost ?? "managed-chrome";
   const browserHostDescriptorPath = configured.browserHostDescriptorPath?.trim();
   const browserHelperScriptPath = configured.browserHelperScriptPath?.trim();
@@ -1908,6 +1912,7 @@ export function resolveBrowserConfig(provider: CodexProviderConfig): ResolvedBro
   }
   return {
     appName,
+    projectUrl,
     browserHost,
     ...(browserHostDescriptorPath ? { browserHostDescriptorPath: resolve(expandUserPath(browserHostDescriptorPath)) } : {}),
     ...(resolvedBrowserHelperScriptPath ? { browserHelperScriptPath: resolvedBrowserHelperScriptPath } : {}),
@@ -2414,7 +2419,7 @@ export class ChatGptBrowserWorker {
     );
   }
 
-  /** Put every browser operation on one fully hydrated Temporary Chat document. */
+  /** Put every browser operation on one fully hydrated configured ChatGPT surface. */
   private async prepareTemporaryChatSurface(
     page: Page,
     captureDiagnostic?: (checkpoint: string) => Promise<void>,
@@ -2423,26 +2428,26 @@ export class ChatGptBrowserWorker {
     // connector is present in the catalog. Navigating again here destroys that freshly hydrated
     // document and made the first verification race a second SPA bootstrap. A leased turn starts on
     // about:blank and therefore still performs exactly one navigation through this same method.
-    if (page.url() !== CHATGPT_TEMPORARY_CHAT_URL) {
-      await page.goto(CHATGPT_TEMPORARY_CHAT_URL, {
+    if (!page.url() || !isChatGptSurfaceUrl(page.url(), this.config.projectUrl)) {
+      await page.goto(this.config.projectUrl, {
         waitUntil: "domcontentloaded",
         timeout: 60_000,
       });
-      await captureDiagnostic?.("temporary-chat-navigation-complete");
+      await captureDiagnostic?.("chatgpt-surface-navigation-complete");
     }
     let composer: Locator;
     try {
       composer = await this.activeComposer(page);
     } catch {
-      throw new Error("ChatGPT web login is expired or the Temporary Chat surface is unavailable");
+      throw new Error("ChatGPT web login is expired or the configured ChatGPT surface is unavailable");
     }
     if (await dismissChatGptTemporaryChatOnboarding(page)) {
-      await captureDiagnostic?.("temporary-chat-onboarding-dismissed");
+      await captureDiagnostic?.("chatgpt-surface-onboarding-dismissed");
     }
     await captureDiagnostic?.("composer-ready");
     await throwIfChatGptSessionFailureAlert(page);
     await assertAuthenticatedChatGptPage(page);
-    await assertTemporaryChatPage(page);
+    await assertChatGptSurfacePage(page, this.config.projectUrl);
     await captureDiagnostic?.("session-verified");
     return composer;
   }
@@ -4052,6 +4057,7 @@ export class ChatGptBrowserWorker {
       phase: "start",
       traceId: turn.traceId,
       helperPid: process.pid,
+      projectUrl: this.config.projectUrl,
       ...(turn.conversationKey ? { conversationKey: turn.conversationKey } : {}),
       ...((turn.conversationKey
         && (turn.nativeConnector || turn.capabilities.localToolsEnabled || turn.requireRetainedConversation))

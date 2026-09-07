@@ -6,7 +6,12 @@ import { tmpdir } from "node:os";
 import {
   CHATGPT_WEB_ZERO_RISK_BACKEND_MODEL,
   CHATGPT_WEB_ZERO_RISK_PRO_BACKEND_MODEL,
+  CHATGPT_WEB_ORACLE_PRO_MODEL,
 } from "./chatgpt-web-models";
+import {
+  CHATGPT_TEMPORARY_CHAT_URL,
+  normalizeChatGptSurfaceUrl,
+} from "./chatgpt-session";
 import type { CodexProviderConfig } from "./types";
 import { VERSION } from "./version";
 
@@ -113,6 +118,12 @@ export interface AppConfig {
   browserHost: BrowserHostMode;
   browserInteractionMode: BrowserInteractionMode;
   browserHostDescriptorPath?: string;
+  /** Optional explicit helper bundle used by a source-built runtime. */
+  browserHelperScriptPath?: string;
+  /** General ChatGPT project or Temporary Chat surface for browser turns. */
+  chatgptProjectUrl?: string;
+  /** Optional separate project used by the Oracle Pro route. */
+  oracleProjectUrl?: string;
   chromeExecutablePath: string;
   storageStatePath: string;
   brokerSocketPath: string;
@@ -428,6 +439,12 @@ function parseConfig(value: unknown, path: string): AppConfig {
   if (typeof parsed.autoApproveToolCalls !== "boolean") {
     throw new Error(`Invalid autoApproveToolCalls in ${path}`);
   }
+  const chatgptProjectUrl = parsed.chatgptProjectUrl === undefined
+    ? undefined
+    : normalizeChatGptSurfaceUrl(parsed.chatgptProjectUrl);
+  const oracleProjectUrl = parsed.oracleProjectUrl === undefined
+    ? undefined
+    : normalizeChatGptSurfaceUrl(parsed.oracleProjectUrl);
   const requiredStrings: Array<keyof AppConfig> = [
     "appName", "chromeExecutablePath", "storageStatePath", "brokerSocketPath", "controlToken",
   ];
@@ -458,6 +475,12 @@ function parseConfig(value: unknown, path: string): AppConfig {
   if (parsed.browserHost === "launcher"
     && !isAbsolute(expandUserPath(parsed.browserHostDescriptorPath!))) {
     throw new Error(`Launcher browserHostDescriptorPath must be absolute in ${path}`);
+  }
+  if (parsed.browserHelperScriptPath !== undefined
+    && (!parsed.browserHelperScriptPath.trim()
+      || !isAbsolute(expandUserPath(parsed.browserHelperScriptPath))
+      || !existsSync(expandUserPath(parsed.browserHelperScriptPath)))) {
+    throw new Error(`browserHelperScriptPath must be an existing absolute file in ${path}`);
   }
   const brokerEndpoint = expandUserPath(parsed.brokerSocketPath!);
   if (process.platform === "win32") {
@@ -548,6 +571,8 @@ function parseConfig(value: unknown, path: string): AppConfig {
     proAvailable,
     experimentalBiggerContext,
     zeroRiskProEnabled,
+    ...(chatgptProjectUrl ? { chatgptProjectUrl } : {}),
+    ...(oracleProjectUrl ? { oracleProjectUrl } : {}),
   } as AppConfig;
 }
 
@@ -556,9 +581,21 @@ export function saveConfig(config: AppConfig): void {
   const original = existsSync(path) ? readFileSync(path, "utf8") : "";
   atomicWriteFile(path, preserveUtf8Bom(`${JSON.stringify(config, null, 2)}\n`, original));
 }
+export function chatgptProjectUrlForModel(config: AppConfig, modelId: string): string {
+  const configured = modelId === CHATGPT_WEB_ORACLE_PRO_MODEL
+    ? config.oracleProjectUrl
+    : config.chatgptProjectUrl;
+  return configured ? normalizeChatGptSurfaceUrl(configured) : CHATGPT_TEMPORARY_CHAT_URL;
+}
 
-export function providerConfig(config: AppConfig): CodexProviderConfig {
+export function providerConfig(
+  config: AppConfig,
+  projectUrl?: string,
+): CodexProviderConfig {
   const manual = config.browserInteractionMode === "manual";
+  const resolvedProjectUrl = projectUrl
+    ? normalizeChatGptSurfaceUrl(projectUrl)
+    : chatgptProjectUrlForModel(config, "chatgpt-web/pro");
   const model = manual
     ? CHATGPT_WEB_ZERO_RISK_BACKEND_MODEL
     : config.solAvailable ? "gpt-5.6-sol" : "gpt-5.6-luna";
@@ -580,17 +617,14 @@ export function providerConfig(config: AppConfig): CodexProviderConfig {
     liveModels: false,
     defaultModel: model,
     contextWindow: config.contextWindow,
-    modelInputModalities: Object.fromEntries(models.map(model => [model, manual ? ["text"] : ["text", "image"]])),
-    modelReasoningEfforts: Object.fromEntries(models.map(modelId => [modelId, efforts])),
-    modelDefaultReasoningEfforts: Object.fromEntries(
-      models.map(modelId => [modelId, manual ? "low" : config.solAvailable ? "high" : "low"]),
-    ),
     noReasoningModels: [],
     chatgptWeb: {
       appName: manual ? config.manualAppName : config.automaticAppName,
+      projectUrl: resolvedProjectUrl,
       browserInteractionMode: config.browserInteractionMode,
       browserHost: config.browserHost,
       browserHostDescriptorPath: config.browserHostDescriptorPath,
+      ...(config.browserHelperScriptPath ? { browserHelperScriptPath: config.browserHelperScriptPath } : {}),
       storageStatePath: config.storageStatePath,
       chromeExecutablePath: config.chromeExecutablePath,
       brokerSocketPath: config.brokerSocketPath,

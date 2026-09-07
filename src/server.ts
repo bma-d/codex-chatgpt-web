@@ -18,7 +18,7 @@ import {
 import { rememberCompactionContinuation } from "./adapters/chatgpt-web/compaction-continuation";
 import { bridgeToResponsesSSE, buildResponseJSON, formatErrorResponse } from "./bridge";
 import type { AppConfig } from "./config";
-import { providerConfig } from "./config";
+import { chatgptProjectUrlForModel, providerConfig } from "./config";
 import { AsyncEventQueue } from "./event-queue";
 import { readJsonRequestBody } from "./http-body";
 import { httpStatusFromTerminalError } from "./lib/errors";
@@ -468,8 +468,10 @@ export async function responseRequest(
   const expanded = expandPreviousResponseInput(raw);
   let parsed: CodexParsedRequest;
   let route: ChatGptWebModelRoute;
+  let requestedChatGptModel = "";
   try {
     parsed = parseRequest(expanded);
+    requestedChatGptModel = parsed.modelId;
     route = routeChatGptWebRequest(parsed, config);
     const identity = extractChatGptTurnIdentity(parsed);
     if (identity.threadId && identity.turnId) {
@@ -534,7 +536,7 @@ export async function responseRequest(
     parsed.context.messages.push({ role: "user", content: COMPACT_PROMPT, timestamp: Date.now() });
   }
 
-  const provider = providerConfig(config);
+  const provider = providerConfig(config, chatgptProjectUrlForModel(config, requestedChatGptModel));
   let traceId: string | undefined;
   try {
     traceId = chatGptWebTraceId(provider, parsed);

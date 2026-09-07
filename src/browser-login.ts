@@ -6,7 +6,7 @@ import type { AppConfig } from "./config";
 import { atomicWriteFile } from "./config";
 import {
   assertAuthenticatedChatGptPage,
-  assertTemporaryChatPage,
+  assertChatGptSurfacePage,
   CHATGPT_TEMPORARY_CHAT_URL,
   detectChatGptAccountCapabilities,
 } from "./chatgpt-session";
@@ -167,7 +167,7 @@ async function inspectStoredState(
       await verifierPage.goto(CHATGPT_TEMPORARY_CHAT_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
       await verifierPage.getByRole("textbox", { name: "Chat with ChatGPT" }).waitFor({ state: "visible", timeout: 60_000 });
       await assertAuthenticatedChatGptPage(verifierPage);
-      await assertTemporaryChatPage(verifierPage);
+      await assertChatGptSurfacePage(verifierPage, CHATGPT_TEMPORARY_CHAT_URL);
       return { ...await detectChatGptAccountCapabilities(verifierPage), url: verifierPage.url() };
     } finally {
       await verifierContext.close();
@@ -416,7 +416,7 @@ export async function loginToChatGpt(
       throw new Error("The authenticated ChatGPT page did not produce a visible composer");
     }
     await assertAuthenticatedChatGptPage(page);
-    await assertTemporaryChatPage(page);
+    await assertChatGptSurfacePage(page, CHATGPT_TEMPORARY_CHAT_URL);
     const state = await context.storageState();
 
     const inspected = await inspectStoredState(config, state);

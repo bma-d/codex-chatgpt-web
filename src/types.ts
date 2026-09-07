@@ -260,8 +260,10 @@ export interface CodexProviderConfig {
   modelDefaultReasoningEfforts?: Record<string, string>;
   noReasoningModels?: string[];
   chatgptWeb?: {
-    /** ChatGPT custom connector attached to tool-capable temporary chats. */
+    /** ChatGPT custom connector attached to the configured browser surface. */
     appName?: string;
+    /** HTTPS chatgpt.com Temporary Chat or project surface used for each turn. */
+    projectUrl?: string;
     /** Whether ChatGPT DOM interaction is automatic or explicitly driven by the user. */
     browserInteractionMode?: "automatic" | "manual";
     /** Explicit browser owner. Launcher mode attaches to the embedded Electron ChatGPT surface. */
@@ -282,7 +284,7 @@ export interface CodexProviderConfig {
     threadEnvironmentStatePath?: string;
     /** Persisted exact-parent rolling checkpoints used only by Free/Luna turns. */
     lunaCheckpointStatePath?: string;
-    /** Optional explicit safety ceiling. Browser turns have no absolute deadline by default. */
+    /** Optional safety ceiling. Browser turns have no absolute deadline by default. */
     turnTimeoutMs?: number;
     /**
      * Seconds of adapter silence before the Responses bridge cancels a turn as a hung upstream.

@@ -13,6 +13,26 @@ function secureTokenMatches(expected, authorization) {
   const wanted = Buffer.from(expected);
   return supplied.length === wanted.length && timingSafeEqual(supplied, wanted);
 }
+function validateProjectUrl(value) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.length > 2048) {
+    throw new Error("projectUrl is invalid");
+  }
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("projectUrl is invalid");
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname !== "chatgpt.com"
+    || parsed.username || parsed.password || parsed.hash
+    || !/^\/g\/[^/]+\/project\/?$/.test(parsed.pathname)
+    || [...parsed.searchParams.keys()].length > 0) {
+    throw new Error("projectUrl must be an HTTPS chatgpt.com project URL");
+  }
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+  return parsed.toString();
+}
 
 async function readJson(request, maxBytes = MAX_BODY_BYTES) {
   const chunks = [];
@@ -154,6 +174,7 @@ class BrowserControlServer {
           || body.connectorIdentity.length > 80)) {
         throw new Error("connectorIdentity is invalid");
       }
+      const projectUrl = validateProjectUrl(body.projectUrl);
       if (body.requireRetainedConversation !== undefined
         && typeof body.requireRetainedConversation !== "boolean") {
         throw new Error("requireRetainedConversation is invalid");
@@ -280,14 +301,24 @@ class BrowserControlServer {
         if (host.browserInteractionMode() === "manual") {
           throw new Error("Automatic browser interaction is disabled");
         }
-        const lease = await host.beginTurn(
-          body.traceId,
-          preferences.showBrowserDuringTurns === true,
-          body.helperPid,
-          body.conversationKey,
-          body.connectorIdentity,
-          body.requireRetainedConversation === true,
-        );
+        const lease = projectUrl === undefined
+          ? await host.beginTurn(
+            body.traceId,
+            preferences.showBrowserDuringTurns === true,
+            body.helperPid,
+            body.conversationKey,
+            body.connectorIdentity,
+            body.requireRetainedConversation === true,
+          )
+          : await host.beginTurn(
+            body.traceId,
+            preferences.showBrowserDuringTurns === true,
+            body.helperPid,
+            body.conversationKey,
+            body.connectorIdentity,
+            body.requireRetainedConversation === true,
+            projectUrl,
+          );
         this.logger.info("browser.turn_started", { traceId: body.traceId });
         writeJson(response, 200, { ok: true, ...lease });
         return;

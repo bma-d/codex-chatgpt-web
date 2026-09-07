@@ -331,6 +331,14 @@ export const CHATGPT_WEB_MODEL_ROUTES: readonly ChatGptWebAutomaticModelRoute[] 
     requiresPro: true,
   },
 ];
+export const CHATGPT_WEB_ORACLE_PRO_MODEL = "chatgpt-web/oracle-pro";
+
+const CHATGPT_WEB_ORACLE_PRO_MODEL_ROUTE: ChatGptWebAutomaticModelRoute = {
+  ...CHATGPT_WEB_MODEL_ROUTES[CHATGPT_WEB_MODEL_ROUTES.length - 1]!,
+  slug: CHATGPT_WEB_ORACLE_PRO_MODEL,
+  displayName: "ChatGPT Web — Oracle Pro",
+  description: "Private Oracle project route through the native Codex harness.",
+};
 
 const routesBySlug = new Map(
   [
@@ -338,9 +346,11 @@ const routesBySlug = new Map(
     CHATGPT_WEB_ZERO_RISK_PRO_MODEL_ROUTE,
     ...CHATGPT_WEB_LUNA_MODEL_ROUTES,
     ...CHATGPT_WEB_MODEL_ROUTES,
+    CHATGPT_WEB_ORACLE_PRO_MODEL_ROUTE,
   ]
     .map(route => [route.slug, route]),
 );
+
 
 export function isChatGptWebModelSlug(modelId: string): boolean {
   return modelId.startsWith(CHATGPT_WEB_MODEL_PREFIX);

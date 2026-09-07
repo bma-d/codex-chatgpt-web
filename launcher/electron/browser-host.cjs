@@ -520,7 +520,7 @@ class BrowserHost {
     return this.turnTabs.get(this.selectedTabId) || null;
   }
 
-  async createTurnTab(traceId, helperPid, conversationKey, connectorIdentity) {
+  async createTurnTab(traceId, helperPid, conversationKey, connectorIdentity, surfaceUrl) {
     if (this.turnTabs.size >= MAX_BROWSER_TABS
       && !BrowserHost.prototype.evictOldestReclaimableTurnTab.call(this)) {
       throw new Error(
@@ -548,6 +548,7 @@ class BrowserHost {
       traceId,
       conversationKey,
       connectorIdentity,
+      surfaceUrl,
       connectorBound: false,
       helperPid,
       view,
@@ -2186,6 +2187,7 @@ class BrowserHost {
     conversationKey,
     connectorIdentity,
     requireRetainedConversation = false,
+    surfaceUrl,
   ) {
     if (this.manualOperation) {
       throw new Error(`ChatGPT browser is busy with ${this.manualOperation}`);
@@ -2198,7 +2200,8 @@ class BrowserHost {
       throw new Error(`Browser turn ${traceId} already belongs to Zero Risk interaction`);
     }
     if (sameTrace && (sameTrace.conversationKey !== conversationKey
-      || sameTrace.connectorIdentity !== connectorIdentity)) {
+      || sameTrace.connectorIdentity !== connectorIdentity
+      || sameTrace.surfaceUrl !== surfaceUrl)) {
       throw new Error(`ChatGPT browser turn ${traceId} conversation metadata does not match its owned tab`);
     }
     const retainedMatches = conversationKey ? [...this.turnTabs.values()].filter((tab) => (
@@ -2206,6 +2209,7 @@ class BrowserHost {
       && tab.status === "ready"
       && tab.conversationKey === conversationKey
       && tab.connectorIdentity === connectorIdentity
+      && tab.surfaceUrl === surfaceUrl
       && (!connectorIdentity || tab.connectorBound === true)
     )) : [];
     if (retainedMatches.length > 1) {
@@ -2261,7 +2265,9 @@ class BrowserHost {
       error.code = "retained_conversation_unavailable";
       throw error;
     }
-    const tab = await this.createTurnTab(traceId, helperPid, conversationKey, connectorIdentity);
+    const tab = surfaceUrl === undefined
+      ? await this.createTurnTab(traceId, helperPid, conversationKey, connectorIdentity)
+      : await this.createTurnTab(traceId, helperPid, conversationKey, connectorIdentity, surfaceUrl);
     this.selectedTabId = tab.id;
     if (reveal) this.show();
     else this.syncViewVisibility();

@@ -66,6 +66,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
   })}\n`, { mode: 0o600 });
   const config: ResolvedBrowserConfig = {
     appName: "Codex Native2",
+    projectUrl: "https://chatgpt.com/?temporary-chat=true",
     browserHost: "launcher",
     browserHostDescriptorPath: descriptorPath,
     browserHelperScriptPath: helper,
@@ -131,6 +132,7 @@ test("daemon streams browser lifecycle through the real helper process", async (
 test("launcher helper protocol preserves multipart context and the compaction flag", async () => {
   const sent: Record<string, unknown>[] = [];
   const client = new LauncherBrowserHelperClient({
+    projectUrl: "https://chatgpt.com/?temporary-chat=true",
     appName: "Codex Native2 DEV",
     browserHost: "launcher",
     browserHostDescriptorPath: "/durable/launcher.json",
@@ -207,6 +209,7 @@ test("an abort dispatched during run submission cannot overtake the run frame", 
   const messages: string[] = [];
   let released = false;
   const client = new LauncherBrowserHelperClient({
+    projectUrl: "https://chatgpt.com/?temporary-chat=true",
     appName: "Codex Native",
     browserHost: "launcher",
     browserHostDescriptorPath: "/durable/launcher.json",
@@ -253,6 +256,7 @@ test("an abort dispatched during run submission cannot overtake the run frame", 
 
 test("structured helper errors preserve the ChatGPT adapter failure contract", async () => {
   const client = new LauncherBrowserHelperClient({
+    projectUrl: "https://chatgpt.com/?temporary-chat=true",
     appName: "Codex Native",
     browserHost: "launcher",
     browserHostDescriptorPath: "/durable/launcher.json",
