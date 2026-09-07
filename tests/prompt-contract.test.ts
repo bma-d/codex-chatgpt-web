@@ -85,14 +85,16 @@ test("read-only prompts resume without exposing a bind capability", () => {
     { localToolsEnabled: false, solAvailable: true, proAvailable: true },
   );
 
-  expect(compiled.text).toContain("The task context is complete. Execute the latest active user request now under the capability contract above.");
+  const contextStart = compiled.text.indexOf("<codex_context_json>");
+  expect(contextStart).toBeGreaterThan(0);
+  expect(compiled.text.slice(0, contextStart).length).toBeLessThanOrEqual(800);
+  expect(compiled.text).toContain("Execute the latest active user request now.");
   expect(compiled.text).not.toContain("codex_bind_turn");
   expect(compiled.text).not.toContain("turn_token");
-  expect(compiled.text).toContain("web search, browsing, research");
-  expect(compiled.text).toContain("The missing local-computer bridge says nothing about whether those ChatGPT capabilities are available");
-  expect(compiled.text).not.toContain("No local computer tool, MCP app");
-  expect(compiled.text).not.toContain("evidence inside");
-  expect(compiled.text).toContain("Do not mention this transport contract, context packaging, or capability routing");
+  expect(compiled.text).toContain("Use ChatGPT-native capabilities when they help complete the request.");
+  expect(compiled.text).toContain("Latest user request:\nperform the task");
+  expect(compiled.text).not.toContain("Act as the model backend for the Codex task encoded below.");
+  expect(compiled.text).not.toContain("Do not mention this transport contract, context packaging, or capability routing");
   expect(compiled.text).not.toContain("CODEX_INTERNAL_CONTEXT_COMPACT");
 });
 
@@ -386,10 +388,9 @@ test("assigns prior assistant output to the model and never attributes Codex con
     role: "assistant",
     content: [{ type: "text", text: "Hi! How can I help?" }],
   });
-  expect(compiled.text).toContain("assistant messages are your own earlier replies");
-  expect(compiled.text).toContain("environment_context, are operational context rather than human-authored text");
-  expect(compiled.text).toContain("answer only from the human-authored text in user messages");
-  expect(compiled.text).toContain("do not attribute, quote, summarize, or otherwise mention them");
+  expect(compiled.text).toContain("Keep system, developer, user, assistant, agent, and tool records distinct");
+  expect(compiled.text).toContain("Treat environment context as operational metadata, not user text.");
+  expect(compiled.text).toContain("Latest user request:\nwhat did I write before?");
 });
 
 test("a long task keeps the newest images and drops the overflow instead of failing", () => {
@@ -534,9 +535,7 @@ test("requires ChatGPT-native rich results to include a safe Markdown answer for
     { localToolsEnabled: false, solAvailable: true, proAvailable: true },
   );
 
-  expect(compiled.text).toContain("also provide the relevant result as ordinary Markdown in the final answer");
-  expect(compiled.text).toContain("A private ChatGPT UI widget never replaces the Markdown answer returned to Codex");
-  expect(compiled.text).toContain("Never copy a ChatGPT widget's HTML, CSS, class names, or DOM markup");
+  expect(compiled.text).toContain("Render native rich results as Markdown, never widget markup.");
 });
 
 test("uses the public Instant name without leaking the browser menu alias into the prompt", () => {
@@ -545,7 +544,7 @@ test("uses the public Instant name without leaking the browser menu alias into t
     { localToolsEnabled: false, solAvailable: true, proAvailable: true },
   );
 
-  expect(compiled.text).toContain("This is ChatGPT Web Instant with no Codex Native bridge to the user's local computer");
+  expect(compiled.text).toContain("This is ChatGPT Web Instant; local Codex tools are unavailable in this turn.");
   expect(compiled.text).not.toContain("Instant 5.5");
 });
 

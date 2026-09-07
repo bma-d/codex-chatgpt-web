@@ -924,7 +924,7 @@ test("prompt verification accepts Lexical NBSP preservation without weakening ot
 
 test("large Markdown-rich context uses one plain-text editing command before exact verification", async () => {
   const prompt = [
-    "Act as the model backend for the Codex task encoded below.",
+    "Latest user request:",
     "```ts",
     `const payload = ${JSON.stringify("x".repeat(220_000))};`,
     "```",
