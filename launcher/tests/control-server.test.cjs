@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { BrowserHost } = require("../electron/browser-host.cjs");
 const { BrowserControlServer } = require("../electron/control-server.cjs");
 
-test("browser control server authenticates and owns turn visibility", async () => {
+test("browser control server accepts the default Temporary Chat surface", async () => {
   const calls = [];
   const logs = [];
   const host = {
@@ -57,6 +57,7 @@ test("browser control server authenticates and owns turn visibility", async () =
         conversationKey: "a".repeat(64),
         connectorIdentity: "Codex Native2",
         requireRetainedConversation: true,
+        projectUrl: "https://chatgpt.com/?temporary-chat=true",
       }),
     });
     assert.equal(start.status, 200);
@@ -114,6 +115,7 @@ test("browser control server authenticates and owns turn visibility", async () =
         "a".repeat(64),
         "Codex Native2",
         true,
+        "https://chatgpt.com/?temporary-chat=true",
       ],
       ["heartbeat", "abcdef123456", process.pid, true],
       ["end", "abcdef123456", process.pid, "completed", true, undefined, true, true],

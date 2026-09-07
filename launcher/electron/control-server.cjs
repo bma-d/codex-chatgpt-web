@@ -24,12 +24,16 @@ function validateProjectUrl(value) {
   } catch {
     throw new Error("projectUrl is invalid");
   }
+  const isTemporary = parsed.pathname === "/"
+    && parsed.searchParams.get("temporary-chat") === "true";
+  const isProject = /^\/g\/[^/]+\/project\/?$/.test(parsed.pathname)
+    && [...parsed.searchParams.keys()].length === 0;
   if (parsed.protocol !== "https:" || parsed.hostname !== "chatgpt.com"
     || parsed.username || parsed.password || parsed.hash
-    || !/^\/g\/[^/]+\/project\/?$/.test(parsed.pathname)
-    || [...parsed.searchParams.keys()].length > 0) {
-    throw new Error("projectUrl must be an HTTPS chatgpt.com project URL");
+    || (!isTemporary && !isProject)) {
+    throw new Error("projectUrl must be an HTTPS chatgpt.com Temporary Chat or project URL");
   }
+  if (isTemporary) return "https://chatgpt.com/?temporary-chat=true";
   parsed.pathname = parsed.pathname.replace(/\/+$/, "");
   return parsed.toString();
 }
