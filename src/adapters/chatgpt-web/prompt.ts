@@ -234,14 +234,23 @@ function plainMessageText(message: CodexMessage): string | undefined {
   return message.content.map(part => part.type === "text" ? part.text : "").join("\n");
 }
 
-function latestUserMessageText(messages: readonly CodexMessage[]): string | undefined {
+function latestUserMessage(messages: readonly CodexMessage[]): CodexMessage | undefined {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]!;
-    if (message.role !== "user") continue;
-    const text = plainMessageText(message);
-    if (text?.trim()) return text;
+    if (messages[index]!.role === "user") return messages[index]!;
   }
   return undefined;
+}
+
+function userMessageText(message: CodexMessage): string {
+  if (typeof message.content === "string") return message.content;
+  return message.content.filter(part => part.type === "text").map(part => part.text).join("\n");
+}
+
+function latestUserMessageText(messages: readonly CodexMessage[]): string | undefined {
+  const message = latestUserMessage(messages);
+  if (!message) return undefined;
+  const text = userMessageText(message);
+  return text.trim() ? text : undefined;
 }
 
 function startsWithControlBlock(message: CodexMessage, tag: string): boolean {
@@ -568,6 +577,20 @@ export function compileChatGptWebPrompt(
       "</codex_transport_resume>",
     ];
   const build = (sourceMessages: readonly CodexMessage[]): CompiledChatGptWebPrompt => {
+    const browserOnlyHandoff = !mode.localTools && !multipartEnabled && !parsed._compactionRequest;
+    const latestMessage = latestUserMessage(sourceMessages);
+    if (browserOnlyHandoff) {
+      if (!latestMessage) throw new Error("ChatGPT Web browser-only handoff requires a user message");
+      const images: ChatGptWebPromptImage[] = [];
+      const budget: ImageBudget = {
+        seen: 0,
+        dropped: Math.max(0, countChatGptContextImages([latestMessage]) - CHATGPT_MAX_INPUT_IMAGES),
+      };
+      if (typeof latestMessage.content !== "string") {
+        messageEnvelope(latestMessage, images, budget);
+      }
+      return { text: userMessageText(latestMessage), images };
+    }
     const images: ChatGptWebPromptImage[] = [];
     const budget: ImageBudget = {
       seen: 0,

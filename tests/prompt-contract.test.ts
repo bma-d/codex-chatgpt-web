@@ -85,17 +85,26 @@ test("read-only prompts resume without exposing a bind capability", () => {
     { localToolsEnabled: false, solAvailable: true, proAvailable: true },
   );
 
-  const contextStart = compiled.text.indexOf("<codex_context_json>");
-  expect(contextStart).toBeGreaterThan(0);
-  expect(compiled.text.slice(0, contextStart).length).toBeLessThanOrEqual(800);
-  expect(compiled.text).toContain("Execute the latest active user request now.");
-  expect(compiled.text).not.toContain("codex_bind_turn");
-  expect(compiled.text).not.toContain("turn_token");
-  expect(compiled.text).toContain("Use ChatGPT-native capabilities when they help complete the request.");
-  expect(compiled.text).toContain("Latest user request:\nperform the task");
-  expect(compiled.text).not.toContain("Act as the model backend for the Codex task encoded below.");
-  expect(compiled.text).not.toContain("Do not mention this transport contract, context packaging, or capability routing");
-  expect(compiled.text).not.toContain("CODEX_INTERNAL_CONTEXT_COMPACT");
+  expect(compiled.text).toBe("perform the task");
+  expect(compiled.images).toEqual([]);
+});
+test("browser-only handoff excludes accumulated Codex harness context", () => {
+  const parsed = request("max");
+  parsed.context.systemPrompt = ["system fluff ".repeat(4_000)];
+  parsed.context.messages = [
+    { role: "developer", content: "developer fluff ".repeat(4_000), timestamp: 1 },
+    { role: "user", content: "old user history ".repeat(4_000), timestamp: 2 },
+    { role: "assistant", content: [{ type: "text", text: "old assistant history ".repeat(4_000) }], timestamp: 3 },
+    { role: "user", content: "latest request", timestamp: 4 },
+  ];
+
+  const compiled = compileChatGptWebPrompt(
+    parsed,
+    { localToolsEnabled: false, solAvailable: true, proAvailable: true },
+  );
+
+  expect(compiled.text).toBe("latest request");
+  expect(compiled.text.length).toBeLessThan(100);
 });
 
 test("Bigger Context sends three semantic record envelopes and starts work from the final part", () => {
@@ -251,8 +260,7 @@ test("Web compaction trims only the oldest history until the browser request fit
     normal,
     { localToolsEnabled: false, solAvailable: true, proAvailable: true },
   );
-  expect(untrimmed.text).toContain("oldest-static");
-  expect(untrimmed.text).toContain("newer-static");
+  expect(untrimmed.text).toBe("checkpoint-now");
   expect(untrimmed.trimmedCompactionMessages).toBeUndefined();
 });
 
@@ -362,7 +370,7 @@ test("Web compaction fails closed when its final instruction alone exceeds the t
   )).toThrow("final compaction instruction alone exceeds");
 });
 
-test("assigns prior assistant output to the model and never attributes Codex context to the human", () => {
+test("browser-only handoff forwards only the latest user message", () => {
   const attributed = request("max");
   attributed.context.messages = [
     { role: "user", content: "hi", timestamp: 1 },
@@ -381,16 +389,7 @@ test("assigns prior assistant output to the model and never attributes Codex con
     attributed,
     { localToolsEnabled: false, solAvailable: true, proAvailable: true },
   );
-  const encoded = compiled.text.match(/<codex_context_json>\n(.+)\n<\/codex_context_json>/s)?.[1];
-  const envelope = JSON.parse(encoded!) as { messages: Array<Record<string, unknown>> };
-
-  expect(envelope.messages[1]).toEqual({
-    role: "assistant",
-    content: [{ type: "text", text: "Hi! How can I help?" }],
-  });
-  expect(compiled.text).toContain("Keep system, developer, user, assistant, agent, and tool records distinct");
-  expect(compiled.text).toContain("Treat environment context as operational metadata, not user text.");
-  expect(compiled.text).toContain("Latest user request:\nwhat did I write before?");
+  expect(compiled.text).toBe("what did I write before?\n<environment_context><cwd>/private/project</cwd></environment_context>");
 });
 
 test("a long task keeps the newest images and drops the overflow instead of failing", () => {
@@ -484,8 +483,8 @@ test("persisted one-pixel image sentinels are not attached to ChatGPT", () => {
   const compiled = compileChatGptWebPrompt(parsed, { localToolsEnabled: false, solAvailable: true, proAvailable: true });
 
   expect(compiled.images.map(image => image.imageUrl)).toEqual(["data:image/png;base64,real-image"]);
-  expect(compiled.text.match(/"type":"image_attachment"/g)).toHaveLength(1);
-  expect(compiled.text).not.toContain("older image not attached");
+  expect(compiled.text).toBe("inspect the real image");
+  expect(compiled.text).not.toContain("data:image");
 });
 
 test("the replayed context never carries a finished turn's broker handles", () => {
@@ -528,24 +527,22 @@ test("the replayed context never carries a finished turn's broker handles", () =
   const envelope = compiled.text.split("<codex_context_json>")[1]!.split("</codex_context_json>")[0]!.trim();
   expect(() => JSON.parse(envelope) as unknown).not.toThrow();
 });
-
-test("requires ChatGPT-native rich results to include a safe Markdown answer for Codex", () => {
+test("browser-only handoff does not add a response contract", () => {
   const compiled = compileChatGptWebPrompt(
     request("max"),
     { localToolsEnabled: false, solAvailable: true, proAvailable: true },
   );
 
-  expect(compiled.text).toContain("Render native rich results as Markdown, never widget markup.");
+  expect(compiled.text).toBe("perform the task");
 });
 
-test("uses the public Instant name without leaking the browser menu alias into the prompt", () => {
+test("browser-only handoff sends exact user text for Instant", () => {
   const compiled = compileChatGptWebPrompt(
     request("low"),
     { localToolsEnabled: false, solAvailable: true, proAvailable: true },
   );
 
-  expect(compiled.text).toContain("This is ChatGPT Web Instant; local Codex tools are unavailable in this turn.");
-  expect(compiled.text).not.toContain("Instant 5.5");
+  expect(compiled.text).toBe("perform the task");
 });
 
 test("keeps large contexts intact in the inline text envelope", () => {
